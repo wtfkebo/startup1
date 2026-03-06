@@ -1,0 +1,131 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { MessageSquare, X, Send, Loader2, Bot } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
+
+export default function Chatbot() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState([
+    { role: 'bot', text: 'Hi! I\'m ThreeFoldHub\'s AI assistant. How can I help you with your web project today?' }
+  ]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [messages, isLoading]);
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const userMessage = input.trim();
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
+    setIsLoading(true);
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("Gemini API key is missing. Please configure it in your environment.");
+      }
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: `You are a helpful assistant for ThreeFoldHub. 
+            ThreeFoldHub builds premium websites for local businesses with a liquid glass aesthetic.
+            Pricing tiers: Basic ($5,999), Professional ($12,999), Enterprise ($29,999), Custom.
+            Services: Custom Web Design, SEO, E-commerce, Branding.
+            Current user message: ${userMessage}` }]
+          }
+        ],
+        config: {
+          systemInstruction: "Keep responses professional, concise, and focused on ThreeFoldHub's services. Encourage users to book a consultation or chat on WhatsApp."
+        }
+      });
+
+      const botText = response.text || "I'm sorry, I'm having trouble connecting. Please try again later.";
+      setMessages(prev => [...prev, { role: 'bot', text: botText }]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      setMessages(prev => [...prev, { role: 'bot', text: "I'm having a technical moment. Feel free to email us directly at hello@threefoldhub.com!" }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="chatbot-container">
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="chat-window"
+          >
+            <div className="chat-header !bg-brand-primary">
+              <div className="flex items-center gap-2">
+                <Bot size={20} className="text-white" />
+                <span className="font-display font-bold">ThreeFoldHub Assistant</span>
+              </div>
+              <button onClick={() => setIsOpen(false)} className="hover:text-white/70 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="chat-messages scroll-smooth" ref={scrollRef}>
+              {messages.map((msg, idx) => (
+                <div key={idx} className={`message-bubble ${msg.role === 'user' ? 'message-user !bg-brand-primary' : 'message-bot'}`}>
+                  {msg.text}
+                </div>
+              ))}
+              {isLoading && (
+                <div className="message-bubble message-bot flex items-center gap-2">
+                  <Loader2 size={16} className="animate-spin text-brand-primary" />
+                  <span className="text-white">Thinking...</span>
+                </div>
+              )}
+            </div>
+
+            <div className="chat-input-area border-t border-brand-primary/10">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                placeholder="Type a message..."
+                className="flex-grow bg-white/5 border-none rounded-xl px-4 py-2 text-sm focus:ring-1 focus:ring-brand-primary outline-none text-white"
+              />
+              <button 
+                onClick={handleSend}
+                disabled={isLoading}
+                className="p-2 bg-brand-primary text-white rounded-xl hover:bg-brand-secondary transition-colors disabled:opacity-50"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.button
+        whileHover={{ scale: 1.1, rotate: 5 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-16 h-16 bg-brand-primary text-white rounded-2xl shadow-2xl flex items-center justify-center hover:bg-brand-secondary transition-all duration-500 relative group overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        {isOpen ? <X size={28} /> : <MessageSquare size={28} />}
+      </motion.button>
+    </div>
+  );
+}
